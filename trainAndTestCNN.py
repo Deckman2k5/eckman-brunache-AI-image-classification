@@ -22,9 +22,24 @@ TEST_DIR = 'Images/datasets/tristanzhang32/ai-generated-images-vs-real-images/ve
 print("Loading training data...")
 train_dataset = tf.keras.utils.image_dataset_from_directory(
     TRAIN_DIR,
+    validation_split=0.15,
+    subset='training',
+    seed=42,
     image_size=(IMG_HEIGHT, IMG_WIDTH),
     batch_size=BATCH_SIZE,
-    label_mode='binary' # binary since we have two classes: AI vs Real
+    label_mode='binary'
+)
+
+# Validation dataset (15%) created from training data so that test dataset
+# remains completely unseen during training for a more honest evaluation of general performance
+val_dataset = tf.keras.utils.image_dataset_from_directory(
+    TRAIN_DIR,
+    validation_split=0.15,
+    subset='validation',
+    seed=42,
+    image_size=(IMG_HEIGHT, IMG_WIDTH),
+    batch_size=BATCH_SIZE,
+    label_mode='binary'
 )
 
 print("Loading testing data...")
@@ -90,7 +105,7 @@ checkpoint_path = "ai_image_detector_best.keras"
 checkpoint_callback = ModelCheckpoint(
     filepath=checkpoint_path,
     save_weights_only=False, # Saves the entire model architecture + weights
-    monitor='val_accuracy',  # Monitor performance on the test set
+    monitor='val_accuracy',  # Monitor performance on the validation set
     mode='max',
     save_best_only=True,     # Only overwrite if the model improved
     verbose=1
@@ -102,7 +117,7 @@ csv_logger = CSVLogger('training_log.csv', append=False)
 print("\nStarting training...")
 history = model.fit(
     train_dataset,
-    validation_data=test_dataset,
+    validation_data=val_dataset,
     epochs=EPOCHS,
     callbacks=[checkpoint_callback, csv_logger]
 )
@@ -112,6 +127,7 @@ print("\n--- Final Model Evaluation on Testing Set ---")
 # Load the best weights saved by the checkpoint to ensure we evaluate the best epoch
 best_model = tf.keras.models.load_model(checkpoint_path)
 
+# Evaluate the best model on the completely unseen test dataset
 results = best_model.evaluate(test_dataset, verbose=0)
 
 # results is a list: [loss, accuracy, precision, recall]
