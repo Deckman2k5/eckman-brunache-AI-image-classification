@@ -1,6 +1,3 @@
-import tensorflow as tf
-from tensorflow.keras import mixed_precision
-from tensorflow.keras.utils import custom_object_scope
 import numpy as np
 import matplotlib.pyplot as plt
 import pandas as pd
@@ -13,13 +10,9 @@ from sklearn.metrics import (
 import os
 
 # ─────────────────────────────────────────────
-# 1. Configuration  (match your training script)
+# 1. Configuration
 # ─────────────────────────────────────────────
-IMG_HEIGHT       = 128
-IMG_WIDTH        = 128
-BATCH_SIZE       = 32
-TEST_DIR         = "SmallImages/test"
-MODEL_PATH       = "ai_image_detector_best.h5"
+NPZ_PATH         = "inference_results.npz"
 HISTORY_CSV_PATH = "training_log.csv"
 OUTPUT_DIR       = "eval_results"
 THRESHOLD        = 0.5
@@ -27,58 +20,21 @@ THRESHOLD        = 0.5
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 
 # ─────────────────────────────────────────────
-# 2. Load model & test data
+# 2. Load inference results from NPZ
 # ─────────────────────────────────────────────
-print("Loading model...")
-with custom_object_scope({'Policy': mixed_precision.Policy}):
-    model = tf.keras.models.load_model(MODEL_PATH, compile=False)
+print("Loading inference results from NPZ...")
+data        = np.load(NPZ_PATH, allow_pickle=True)
+all_probs   = data['probs']
+all_labels  = data['labels'].astype(int)
+all_images  = data['images']
+class_names = data['class_names'].tolist()
+all_preds   = (all_probs >= THRESHOLD).astype(int)
 
-model.compile(
-    optimizer='adam',
-    loss='binary_crossentropy',
-    metrics=[
-        'accuracy',
-        tf.keras.metrics.Precision(name='precision'),
-        tf.keras.metrics.Recall(name='recall')
-    ]
-)
-
-print("Loading test dataset...")
-test_dataset = tf.keras.utils.image_dataset_from_directory(
-    TEST_DIR,
-    image_size=(IMG_HEIGHT, IMG_WIDTH),
-    batch_size=BATCH_SIZE,
-    label_mode="binary",
-    shuffle=False
-)
-
-class_names = test_dataset.class_names
-print(f"Classes detected: {class_names}")
-
-AUTOTUNE = tf.data.AUTOTUNE
-test_dataset_perf = test_dataset.cache().prefetch(buffer_size=AUTOTUNE)
+print(f"Loaded {len(all_labels)} samples")
+print(f"Classes: {class_names}")
 
 # ─────────────────────────────────────────────
-# 3. Collect predictions & ground-truth labels
-# ─────────────────────────────────────────────
-print("Running inference...")
-all_probs  = []
-all_labels = []
-all_images = []
-
-for images, labels in test_dataset:
-    preds = model.predict(images, verbose=0)
-    all_probs.append(preds.flatten())
-    all_labels.append(labels.numpy().flatten().astype(int))
-    all_images.append(images.numpy())
-
-all_probs  = np.concatenate(all_probs)
-all_labels = np.concatenate(all_labels)
-all_images = np.concatenate(all_images)
-all_preds  = (all_probs >= THRESHOLD).astype(int)
-
-# ─────────────────────────────────────────────
-# 4. Console summary
+# 3. Console summary
 # ─────────────────────────────────────────────
 print("\n" + "="*50)
 print("  EVALUATION SUMMARY")
@@ -91,7 +47,7 @@ for idx, name in enumerate(class_names):
     print(f"  Accuracy on '{name}': {acc*100:.2f}%")
 
 # ─────────────────────────────────────────────
-# 5. Confusion Matrix
+# 4. Confusion Matrix
 # ─────────────────────────────────────────────
 cm = confusion_matrix(all_labels, all_preds)
 fig, ax = plt.subplots(figsize=(6, 5))
@@ -105,7 +61,7 @@ plt.close()
 print(f"\nSaved: {path}")
 
 # ─────────────────────────────────────────────
-# 6. ROC Curve
+# 5. ROC Curve
 # ─────────────────────────────────────────────
 fpr, tpr, _ = roc_curve(all_labels, all_probs)
 roc_auc     = auc(fpr, tpr)
@@ -125,7 +81,7 @@ plt.close()
 print(f"Saved: {path}")
 
 # ─────────────────────────────────────────────
-# 7. Precision–Recall Curve
+# 6. Precision–Recall Curve
 # ─────────────────────────────────────────────
 precision_vals, recall_vals, _ = precision_recall_curve(all_labels, all_probs)
 ap = average_precision_score(all_labels, all_probs)
@@ -144,7 +100,7 @@ plt.close()
 print(f"Saved: {path}")
 
 # ─────────────────────────────────────────────
-# 8. Confidence distribution histogram
+# 7. Confidence distribution histogram
 # ─────────────────────────────────────────────
 fig, ax = plt.subplots(figsize=(7, 4))
 for idx, name in enumerate(class_names):
@@ -163,7 +119,7 @@ plt.close()
 print(f"Saved: {path}")
 
 # ─────────────────────────────────────────────
-# 9. Sample prediction grid  (correct vs wrong)
+# 8. Sample prediction grid (correct vs wrong)
 # ─────────────────────────────────────────────
 def sample_grid(title, indices, n=16):
     """Plot up to n images from the given indices."""
@@ -207,13 +163,13 @@ else:
     print("No misclassified images found — perfect score!")
 
 # ─────────────────────────────────────────────
-# 10. Training History (from CSV)
+# 9. Training History (from CSV)
 # ─────────────────────────────────────────────
 print("\nLoading training history...")
 df = pd.read_csv(HISTORY_CSV_PATH)
-epochs = df['epoch'] + 1  # make 1-indexed for display
+epochs = df['epoch'] + 1
 
-# 10a. Accuracy curve (train vs val)
+# 9a. Accuracy curve
 fig, ax = plt.subplots(figsize=(8, 5))
 ax.plot(epochs, df['accuracy'],     lw=2, label='Train Accuracy')
 ax.plot(epochs, df['val_accuracy'], lw=2, label='Val Accuracy', linestyle='--')
@@ -228,7 +184,7 @@ plt.savefig(path, dpi=150)
 plt.close()
 print(f"Saved: {path}")
 
-# 10b. Loss curve (train vs val)
+# 9b. Loss curve
 fig, ax = plt.subplots(figsize=(8, 5))
 ax.plot(epochs, df['loss'],     lw=2, label='Train Loss')
 ax.plot(epochs, df['val_loss'], lw=2, label='Val Loss', linestyle='--')
@@ -243,7 +199,7 @@ plt.savefig(path, dpi=150)
 plt.close()
 print(f"Saved: {path}")
 
-# 10c. Overfitting gap (train accuracy - val accuracy per epoch)
+# 9c. Overfitting gap
 gap = df['accuracy'] - df['val_accuracy']
 fig, ax = plt.subplots(figsize=(8, 4))
 ax.plot(epochs, gap, lw=2, color='crimson', label='Accuracy Gap (Train - Val)')
@@ -260,7 +216,7 @@ plt.savefig(path, dpi=150)
 plt.close()
 print(f"Saved: {path}")
 
-# 10d. Precision & Recall curves (train vs val)
+# 9d. Precision & Recall curves
 fig, axes = plt.subplots(1, 2, figsize=(12, 5))
 
 axes[0].plot(epochs, df['precision'],     lw=2, label='Train Precision')
@@ -285,32 +241,28 @@ plt.savefig(path, dpi=150)
 plt.close()
 print(f"Saved: {path}")
 
-# 10e. Combined 2x2 dashboard
+# 9e. Combined 2x2 dashboard
 fig, axes = plt.subplots(2, 2, figsize=(14, 10))
 fig.suptitle("Training History Dashboard", fontsize=16, fontweight="bold")
 
-# Accuracy
 axes[0, 0].plot(epochs, df['accuracy'],     lw=2, label='Train')
 axes[0, 0].plot(epochs, df['val_accuracy'], lw=2, label='Val', linestyle='--')
 axes[0, 0].set_title("Accuracy")
 axes[0, 0].legend()
 axes[0, 0].grid(alpha=0.3)
 
-# Loss
 axes[0, 1].plot(epochs, df['loss'],     lw=2, label='Train')
 axes[0, 1].plot(epochs, df['val_loss'], lw=2, label='Val', linestyle='--')
 axes[0, 1].set_title("Loss")
 axes[0, 1].legend()
 axes[0, 1].grid(alpha=0.3)
 
-# Precision
 axes[1, 0].plot(epochs, df['precision'],     lw=2, label='Train')
 axes[1, 0].plot(epochs, df['val_precision'], lw=2, label='Val', linestyle='--')
 axes[1, 0].set_title("Precision")
 axes[1, 0].legend()
 axes[1, 0].grid(alpha=0.3)
 
-# Recall
 axes[1, 1].plot(epochs, df['recall'],     lw=2, label='Train')
 axes[1, 1].plot(epochs, df['val_recall'], lw=2, label='Val', linestyle='--')
 axes[1, 1].set_title("Recall")
