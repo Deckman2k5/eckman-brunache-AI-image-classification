@@ -4,6 +4,7 @@ from tensorflow.keras.callbacks import ModelCheckpoint
 from tensorflow.keras import mixed_precision
 from tensorflow.keras.callbacks import CSVLogger
 import os
+import numpy as np
 
 mixed_precision.set_global_policy('mixed_float16')
 
@@ -47,7 +48,8 @@ test_dataset = tf.keras.utils.image_dataset_from_directory(
     TEST_DIR,
     image_size=(IMG_HEIGHT, IMG_WIDTH),
     batch_size=BATCH_SIZE,
-    label_mode='binary'
+    label_mode='binary',
+    shuffle=False  # Keeps image order for visualization consistency
 )
 
 # Optimize dataset loading for performance
@@ -135,3 +137,39 @@ print(f"Test Loss:      {results[0]:.4f}")
 print(f"Test Accuracy:  {results[1]*100:.2f}%")
 print(f"Test Precision: {results[2]*100:.2f}%")
 print(f"Test Recall:    {results[3]*100:.2f}%")
+
+# --- 8. Save inference results for visualization ---
+# Reload test_dataset without cache/prefetch to ensure clean iteration with shuffle=False
+print("\nCollecting predictions for visualization...")
+raw_test_dataset = tf.keras.utils.image_dataset_from_directory(
+    TEST_DIR,
+    image_size=(IMG_HEIGHT, IMG_WIDTH),
+    batch_size=BATCH_SIZE,
+    label_mode='binary',
+    shuffle=False
+)
+ 
+all_probs  = []
+all_labels = []
+all_images = []
+ 
+for images, labels in raw_test_dataset:
+    preds = best_model.predict(images, verbose=0)
+    all_probs.append(preds.flatten())
+    all_labels.append(labels.numpy().flatten().astype(int))
+    all_images.append(images.numpy())
+ 
+all_probs  = np.concatenate(all_probs)
+all_labels = np.concatenate(all_labels)
+all_images = np.concatenate(all_images)
+ 
+class_names = raw_test_dataset.class_names  # e.g. ['AI', 'Real']
+ 
+np.savez_compressed(
+    "inference_results.npz",
+    probs=all_probs,
+    labels=all_labels,
+    images=all_images,
+    class_names=class_names
+)
+print("Saved inference_results.npz")
