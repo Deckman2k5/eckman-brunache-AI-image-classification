@@ -37,8 +37,8 @@ test_dataset = tf.keras.utils.image_dataset_from_directory(
 
 # Optimize dataset loading for performance
 AUTOTUNE = tf.data.AUTOTUNE
-train_dataset = train_dataset.cache().shuffle(1000).prefetch(buffer_size=AUTOTUNE)
-test_dataset = test_dataset.cache().prefetch(buffer_size=AUTOTUNE)
+train_dataset = train_dataset.cache('Images/datasets/train_cache').shuffle(800).prefetch(buffer_size=AUTOTUNE)
+test_dataset = test_dataset.cache('Images/datasets/test_cache').prefetch(buffer_size=AUTOTUNE)
 
 # --- 3. Model Architecture ---
 def build_cnn_model():
@@ -56,6 +56,10 @@ def build_cnn_model():
         
         # Convolutional Block 3
         layers.Conv2D(128, (3, 3), activation='relu'),
+        layers.MaxPooling2D((2, 2)),
+
+        # Convolutional Block 4 (Optional for 192x192)
+        layers.Conv2D(256, (3, 3), activation='relu'),
         layers.MaxPooling2D((2, 2)),
         
         # Flatten and Dense Layers
