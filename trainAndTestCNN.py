@@ -9,8 +9,8 @@ mixed_precision.set_global_policy('mixed_float16')
 
 # --- 1. Configuration ---
 # Can be changed to use more or less compute
-IMG_HEIGHT = 128
-IMG_WIDTH = 128
+IMG_HEIGHT = 192
+IMG_WIDTH = 192
 BATCH_SIZE = 32
 EPOCHS = 15
 
