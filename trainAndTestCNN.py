@@ -2,6 +2,7 @@ import tensorflow as tf
 from tensorflow.keras import layers, models
 from tensorflow.keras.callbacks import ModelCheckpoint
 from tensorflow.keras import mixed_precision
+from tensorflow.keras.callbacks import CSVLogger
 import os
 
 mixed_precision.set_global_policy('mixed_float16')
@@ -95,13 +96,15 @@ checkpoint_callback = ModelCheckpoint(
     verbose=1
 )
 
+csv_logger = CSVLogger('training_log.csv', append=False)
+
 # --- 6. Training ---
 print("\nStarting training...")
 history = model.fit(
     train_dataset,
     validation_data=test_dataset,
     epochs=EPOCHS,
-    callbacks=[checkpoint_callback]
+    callbacks=[checkpoint_callback, csv_logger]
 )
 
 # --- 7. Final Evaluation ---
