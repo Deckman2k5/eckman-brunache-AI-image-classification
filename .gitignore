@@ -3,3 +3,4 @@ datasets
 SmallImages
 tf_env
 .venv
+inference_results.npz
