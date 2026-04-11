@@ -14,8 +14,8 @@ BATCH_SIZE = 32
 EPOCHS = 15
 
 # Define data directories
-TRAIN_DIR = 'SmallImages/train'
-TEST_DIR = 'SmallImages/test'
+TRAIN_DIR = 'Images/datasets/tristanzhang32/ai-generated-images-vs-real-images/versions/2/train'
+TEST_DIR = 'Images/datasets/tristanzhang32/ai-generated-images-vs-real-images/versions/2/test'
 
 # --- 2. Data Loading ---
 print("Loading training data...")
