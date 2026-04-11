@@ -3,7 +3,7 @@ from tensorflow.keras import mixed_precision
 from tensorflow.keras.utils import custom_object_scope
 import numpy as np
 import matplotlib.pyplot as plt
-import matplotlib.gridspec as gridspec
+import pandas as pd
 from sklearn.metrics import (
     confusion_matrix, ConfusionMatrixDisplay,
     roc_curve, auc,
@@ -15,13 +15,14 @@ import os
 # ─────────────────────────────────────────────
 # 1. Configuration  (match your training script)
 # ─────────────────────────────────────────────
-IMG_HEIGHT  = 128
-IMG_WIDTH   = 128
-BATCH_SIZE  = 32
-TEST_DIR    = "SmallImages/test"
-MODEL_PATH  = "ai_image_detector_best.h5"
-OUTPUT_DIR  = "eval_results"          # all plots saved here
-THRESHOLD   = 0.5                     # decision boundary (tweak if needed)
+IMG_HEIGHT       = 128
+IMG_WIDTH        = 128
+BATCH_SIZE       = 32
+TEST_DIR         = "SmallImages/test"
+MODEL_PATH       = "ai_image_detector_best.h5"
+HISTORY_CSV_PATH = "training_log.csv"
+OUTPUT_DIR       = "eval_results"
+THRESHOLD        = 0.5
 
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 
@@ -48,10 +49,10 @@ test_dataset = tf.keras.utils.image_dataset_from_directory(
     image_size=(IMG_HEIGHT, IMG_WIDTH),
     batch_size=BATCH_SIZE,
     label_mode="binary",
-    shuffle=False           # keep order so images align with predictions
+    shuffle=False
 )
 
-class_names = test_dataset.class_names   # e.g. ['AI', 'Real']
+class_names = test_dataset.class_names
 print(f"Classes detected: {class_names}")
 
 AUTOTUNE = tf.data.AUTOTUNE
@@ -61,9 +62,9 @@ test_dataset_perf = test_dataset.cache().prefetch(buffer_size=AUTOTUNE)
 # 3. Collect predictions & ground-truth labels
 # ─────────────────────────────────────────────
 print("Running inference...")
-all_probs  = []   # raw sigmoid outputs  [0.0 – 1.0]
-all_labels = []   # ground-truth integers
-all_images = []   # pixel arrays for the sample grid
+all_probs  = []
+all_labels = []
+all_images = []
 
 for images, labels in test_dataset:
     preds = model.predict(images, verbose=0)
@@ -84,7 +85,6 @@ print("  EVALUATION SUMMARY")
 print("="*50)
 print(classification_report(all_labels, all_preds, target_names=class_names))
 
-# Per-class accuracy
 for idx, name in enumerate(class_names):
     mask = all_labels == idx
     acc  = (all_preds[mask] == all_labels[mask]).mean()
@@ -187,7 +187,6 @@ def sample_grid(title, indices, n=16):
 correct_idx   = np.where(all_preds == all_labels)[0]
 incorrect_idx = np.where(all_preds != all_labels)[0]
 
-# Shuffle for variety
 rng = np.random.default_rng(42)
 rng.shuffle(correct_idx)
 rng.shuffle(incorrect_idx)
@@ -206,6 +205,123 @@ if len(incorrect_idx) > 0:
     print(f"Saved: {path}")
 else:
     print("No misclassified images found — perfect score!")
+
+# ─────────────────────────────────────────────
+# 10. Training History (from CSV)
+# ─────────────────────────────────────────────
+print("\nLoading training history...")
+df = pd.read_csv(HISTORY_CSV_PATH)
+epochs = df['epoch'] + 1  # make 1-indexed for display
+
+# 10a. Accuracy curve (train vs val)
+fig, ax = plt.subplots(figsize=(8, 5))
+ax.plot(epochs, df['accuracy'],     lw=2, label='Train Accuracy')
+ax.plot(epochs, df['val_accuracy'], lw=2, label='Val Accuracy', linestyle='--')
+ax.set_xlabel("Epoch")
+ax.set_ylabel("Accuracy")
+ax.set_title("Training vs Validation Accuracy", fontsize=14, fontweight="bold")
+ax.legend()
+ax.grid(alpha=0.3)
+plt.tight_layout()
+path = os.path.join(OUTPUT_DIR, "accuracy_curve.png")
+plt.savefig(path, dpi=150)
+plt.close()
+print(f"Saved: {path}")
+
+# 10b. Loss curve (train vs val)
+fig, ax = plt.subplots(figsize=(8, 5))
+ax.plot(epochs, df['loss'],     lw=2, label='Train Loss')
+ax.plot(epochs, df['val_loss'], lw=2, label='Val Loss', linestyle='--')
+ax.set_xlabel("Epoch")
+ax.set_ylabel("Loss")
+ax.set_title("Training vs Validation Loss", fontsize=14, fontweight="bold")
+ax.legend()
+ax.grid(alpha=0.3)
+plt.tight_layout()
+path = os.path.join(OUTPUT_DIR, "loss_curve.png")
+plt.savefig(path, dpi=150)
+plt.close()
+print(f"Saved: {path}")
+
+# 10c. Overfitting gap (train accuracy - val accuracy per epoch)
+gap = df['accuracy'] - df['val_accuracy']
+fig, ax = plt.subplots(figsize=(8, 4))
+ax.plot(epochs, gap, lw=2, color='crimson', label='Accuracy Gap (Train - Val)')
+ax.axhline(0, color='gray', linestyle='--', lw=1)
+ax.fill_between(epochs, gap, alpha=0.15, color='crimson')
+ax.set_xlabel("Epoch")
+ax.set_ylabel("Accuracy Gap")
+ax.set_title("Overfitting Gap Over Training", fontsize=14, fontweight="bold")
+ax.legend()
+ax.grid(alpha=0.3)
+plt.tight_layout()
+path = os.path.join(OUTPUT_DIR, "overfitting_gap.png")
+plt.savefig(path, dpi=150)
+plt.close()
+print(f"Saved: {path}")
+
+# 10d. Precision & Recall curves (train vs val)
+fig, axes = plt.subplots(1, 2, figsize=(12, 5))
+
+axes[0].plot(epochs, df['precision'],     lw=2, label='Train Precision')
+axes[0].plot(epochs, df['val_precision'], lw=2, label='Val Precision', linestyle='--')
+axes[0].set_xlabel("Epoch")
+axes[0].set_ylabel("Precision")
+axes[0].set_title("Precision Over Epochs", fontsize=13, fontweight="bold")
+axes[0].legend()
+axes[0].grid(alpha=0.3)
+
+axes[1].plot(epochs, df['recall'],     lw=2, label='Train Recall')
+axes[1].plot(epochs, df['val_recall'], lw=2, label='Val Recall', linestyle='--')
+axes[1].set_xlabel("Epoch")
+axes[1].set_ylabel("Recall")
+axes[1].set_title("Recall Over Epochs", fontsize=13, fontweight="bold")
+axes[1].legend()
+axes[1].grid(alpha=0.3)
+
+plt.tight_layout()
+path = os.path.join(OUTPUT_DIR, "precision_recall_over_epochs.png")
+plt.savefig(path, dpi=150)
+plt.close()
+print(f"Saved: {path}")
+
+# 10e. Combined 2x2 dashboard
+fig, axes = plt.subplots(2, 2, figsize=(14, 10))
+fig.suptitle("Training History Dashboard", fontsize=16, fontweight="bold")
+
+# Accuracy
+axes[0, 0].plot(epochs, df['accuracy'],     lw=2, label='Train')
+axes[0, 0].plot(epochs, df['val_accuracy'], lw=2, label='Val', linestyle='--')
+axes[0, 0].set_title("Accuracy")
+axes[0, 0].legend()
+axes[0, 0].grid(alpha=0.3)
+
+# Loss
+axes[0, 1].plot(epochs, df['loss'],     lw=2, label='Train')
+axes[0, 1].plot(epochs, df['val_loss'], lw=2, label='Val', linestyle='--')
+axes[0, 1].set_title("Loss")
+axes[0, 1].legend()
+axes[0, 1].grid(alpha=0.3)
+
+# Precision
+axes[1, 0].plot(epochs, df['precision'],     lw=2, label='Train')
+axes[1, 0].plot(epochs, df['val_precision'], lw=2, label='Val', linestyle='--')
+axes[1, 0].set_title("Precision")
+axes[1, 0].legend()
+axes[1, 0].grid(alpha=0.3)
+
+# Recall
+axes[1, 1].plot(epochs, df['recall'],     lw=2, label='Train')
+axes[1, 1].plot(epochs, df['val_recall'], lw=2, label='Val', linestyle='--')
+axes[1, 1].set_title("Recall")
+axes[1, 1].legend()
+axes[1, 1].grid(alpha=0.3)
+
+plt.tight_layout()
+path = os.path.join(OUTPUT_DIR, "training_dashboard.png")
+plt.savefig(path, dpi=150)
+plt.close()
+print(f"Saved: {path}")
 
 print(f"\nAll evaluation outputs saved to '{OUTPUT_DIR}/'")
 print("="*50)
