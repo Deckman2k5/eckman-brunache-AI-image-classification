@@ -3,4 +3,5 @@ datasets
 SmallImages
 tf_env
 .venv
+resnet50_best.keras
 *.npz
