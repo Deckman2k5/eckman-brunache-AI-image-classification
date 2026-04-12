@@ -1,7 +1,7 @@
-tensorflow
-kagglehub
-pillow
-tensorflow 
-matplotlib 
-seaborn 
+tensorflow==2.10
+numpy<2
+pandas
+matplotlib
 scikit-learn
+pillow
+kagglehub

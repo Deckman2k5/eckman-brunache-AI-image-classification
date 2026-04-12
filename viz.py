@@ -12,8 +12,8 @@ import os
 # ─────────────────────────────────────────────
 # 1. Configuration
 # ─────────────────────────────────────────────
-NPZ_PATH         = "inference_results.npz"
-HISTORY_CSV_PATH = "training_log.csv"
+NPZ_PATH         = "resnet50_inference_results.npz"
+HISTORY_CSV_PATH = "resnet50_finetune_log.csv"
 OUTPUT_DIR       = "eval_results"
 THRESHOLD        = 0.5
 

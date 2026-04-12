@@ -42,8 +42,8 @@ FINE_TUNE_LAYERS = 30     # Number of top ResNet50 layers to unfreeze in phase 2
                           # Earlier layers detect basic edges/textures that are
                           # universal — only later layers need task-specific tuning
 
-TRAIN_DIR = 'SmallImages/train'
-TEST_DIR  = 'SmallImages/test'
+TRAIN_DIR = 'Images/train'
+TEST_DIR  = 'Images/test'
 
 # ─────────────────────────────────────────────
 # 3. Data Loading

@@ -26,7 +26,7 @@ def clean_dataset(directory):
                 
     print(f"Finished scanning {directory}. Deleted {bad_files} bad files.\n")
 
-clean_dataset("SmallImages/train")
-clean_dataset("SmallImages/test")
+clean_dataset("Images/train")
+clean_dataset("Images/test")
 
 print("Dataset cleanup complete! You can now run your model.")
